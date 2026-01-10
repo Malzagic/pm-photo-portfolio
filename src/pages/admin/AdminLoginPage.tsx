@@ -1,20 +1,18 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/useAuth";
 
 export function AdminLoginPage() {
   const { login, user, loading } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
-      window.location.href = "/admin";
+      navigate("/admin", { replace: true });
     }
-  }, [user]);
+  }, [user, navigate]);
 
   if (loading) {
-    return null;
-  }
-
-  if (user) {
     return null;
   }
 

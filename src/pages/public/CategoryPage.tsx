@@ -3,6 +3,7 @@ import { usePublicPhotos } from "@/features/photos/usePublicPhotos";
 import type { PhotoCategory } from "@/features/photos/photo.types";
 import { getPhotoUrl } from "@/features/photos/photo.storage";
 import { useEffect, useState } from "react";
+import { setSEO } from "@/lib/seo";
 
 const ALLOWED_CATEGORIES: PhotoCategory[] = ["astro", "landscape", "nature"];
 
@@ -11,13 +12,26 @@ export function CategoryPage() {
 
   const isValidCategory = !!category && ALLOWED_CATEGORIES.includes(category as PhotoCategory);
 
-  // HOOKI ZAWSZE NA GÓRZE
+  // hooks must be called first
   const typedCategory = isValidCategory ? (category as PhotoCategory) : "landscape";
 
   const { photos, loading } = usePublicPhotos(typedCategory);
 
   const [urls, setUrls] = useState<Record<string, string>>({});
 
+  // SEO effect
+  useEffect(() => {
+    if (!isValidCategory) return;
+
+    const label = typedCategory.charAt(0).toUpperCase() + typedCategory.slice(1);
+
+    setSEO(`${label} Photography`, `${label} photography portfolio.`, {
+      title: `${label} Photography`,
+      description: `${label} photography portfolio.`,
+    });
+  }, [typedCategory, isValidCategory]);
+
+  // Load photo URLs
   useEffect(() => {
     async function loadUrls() {
       const entries = await Promise.all(
@@ -41,11 +55,23 @@ export function CategoryPage() {
   }
 
   if (loading) {
-    return <div>Loading…</div>;
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: 24,
+        }}
+      >
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="skeleton" style={{ paddingTop: "66%" }} />
+        ))}
+      </div>
+    );
   }
 
   if (photos.length === 0) {
-    return <div>No photos in this category.</div>;
+    return <p style={{ opacity: 0.6 }}>New work coming soon.</p>;
   }
 
   return (
@@ -66,6 +92,7 @@ export function CategoryPage() {
               alt={photo.title}
               loading="lazy"
               style={{ width: "100%", height: "auto", borderRadius: 6 }}
+              className="photo-clickable"
             />
           </a>
         ))}

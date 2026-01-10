@@ -50,23 +50,50 @@ export function AdminPhotosPage() {
     <div>
       <h1>Photos</h1>
 
-      <ul>
+      <div style={{ display: "grid", gap: 16 }}>
         {photos.map(photo => (
-          <li key={photo.id} style={{ display: "flex", gap: 12 }}>
-            {urls[photo.id] && <img src={urls[photo.id]} alt={photo.title} width={120} loading="lazy" />}
+          <div
+            key={photo.id}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "80px 1fr auto",
+              gap: 16,
+              alignItems: "center",
+              padding: 12,
+              background: "#666",
+              borderRadius: 6,
+              border: "1px solid #e0e0e0",
+            }}
+          >
+            {urls[photo.id] && (
+              <img
+                src={urls[photo.id]}
+                alt=""
+                style={{
+                  width: 80,
+                  height: 80,
+                  objectFit: "cover",
+                  borderRadius: 4,
+                }}
+              />
+            )}
 
             <div>
-              <strong>{photo.title}</strong>
-              <div>{photo.category}</div>
-              <div>{photo.published ? "✓ published" : "draft"}</div>
-              <a href={`/admin/photos/${photo.id}`}>Edit</a>
-              <button onClick={() => handleDelete(photo.id, photo.storagePath)} style={{ marginTop: 8 }}>
-                Delete
-              </button>
+              <strong>{photo.title || "(no title)"}</strong>
+              <div style={{ fontSize: 12, color: "#666" }}>{photo.category}</div>
+              <div style={{ fontSize: 12 }}>
+                {photo.published ? "✓ published" : "draft"}
+                {photo.featured && " · featured"}
+              </div>
             </div>
-          </li>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <a href={`/admin/photos/${photo.id}`}>Edit</a>
+              <button onClick={() => handleDelete(photo.id, photo.storagePath)}>Delete</button>
+            </div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
