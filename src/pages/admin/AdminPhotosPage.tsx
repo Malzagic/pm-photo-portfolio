@@ -20,7 +20,7 @@ export function AdminPhotosPage() {
    * Handles the secure deletion of a photo from both the server and Firestore.
    */
   async function handleDelete(photoId: string, storagePath: string) {
-    if (!user) return;
+    if (!user || !storagePath) return;
 
     const confirmed = window.confirm(
       "Are you sure you want to permanently delete this photo from the server and database?",
@@ -29,11 +29,8 @@ export function AdminPhotosPage() {
 
     setActionLoading(photoId);
     try {
-      // Get fresh ID token for the Mikrus server verification
-      const idToken = await user.getIdToken();
-
-      // Execute the delete action (Storage + Firestore)
-      await deletePhoto({ id: photoId, storagePath }, idToken);
+      // Execute the delete action (Storage + Firestore) without manual token passing
+      await deletePhoto({ id: photoId, storagePath });
 
       // Refresh the page to reflect changes
       window.location.reload();
@@ -55,19 +52,18 @@ export function AdminPhotosPage() {
           .filter(p => p.storagePath)
           .map(async photo => {
             const url = await getPhotoUrl(photo.storagePath);
-            return [photo.id, url] as const;
+            return [photo.id, url];
           }),
       );
-
       setUrls(Object.fromEntries(entries));
     }
-
     if (photos.length > 0) {
       loadUrls();
     }
   }, [photos]);
 
   if (loading) return <div style={{ opacity: 0.6, padding: "2rem" }}>Loading professional assets...</div>;
+
   if (error) return <div style={{ color: "#ff4444", padding: "2rem" }}>Error: {error}</div>;
 
   return (
@@ -82,7 +78,6 @@ export function AdminPhotosPage() {
         }}
       >
         <h1 style={{ fontSize: "1.5rem", fontWeight: 400, opacity: 0.8 }}>Photo Management</h1>
-
         <Link
           to="/admin/photos/create"
           style={{

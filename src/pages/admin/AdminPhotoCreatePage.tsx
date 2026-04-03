@@ -3,26 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/useAuth";
 import { useCategories } from "@/features/categories/useCategories"; // NEW: Dynamic categories hook
 import { uploadWebPhoto } from "@/features/photos/photo.storage";
-import type { PhotoCategory } from "@/features/photos/photo.types";
 import { createPhoto, updatePhoto } from "@/features/photos/photo.service";
 import { getImageAspectRatio } from "@/features/photos/photo.image";
 import { serverTimestamp } from "firebase/firestore";
 
 /**
  * AdminPhotoCreatePage component.
- * Handles photo uploads to the Mikrus server and metadata storage in Firestore.
+ * Handles photo uploads to Firebase Storage and metadata storage in Firestore.
  * Now fully integrated with dynamic categories.
  */
 export function AdminPhotoCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-
   // Fetch dynamic categories from the CMS
   const { categories, loading: catsLoading } = useCategories();
-
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<PhotoCategory>(""); // Initialized as empty
+  const [category, setCategory] = useState(""); // Initialized as empty
   const [published, setPublished] = useState(true);
   const [featured, setFeatured] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,7 +33,7 @@ export function AdminPhotoCreatePage() {
     }
   }, [categories, category]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     // Basic validation including dynamic category check
@@ -51,12 +48,14 @@ export function AdminPhotoCreatePage() {
     }
 
     setLoading(true);
-
     try {
       // 1. Calculate aspect ratio for professional grid rendering
       const ratio = await getImageAspectRatio(file);
 
-      // 2. Initialize Firestore document with the selected dynamic category
+      // 2. Execute the upload directly to Firebase Storage
+      const { storagePath } = await uploadWebPhoto(file);
+
+      // 3. Initialize Firestore document with the selected dynamic category
       const photoId = await createPhoto({
         title,
         slug: title.toLowerCase().trim().replace(/\s+/g, "-"),
@@ -68,13 +67,7 @@ export function AdminPhotoCreatePage() {
         takenAt: serverTimestamp(),
       });
 
-      // 3. Authenticate with Mikrus server using Firebase ID Token
-      const idToken = await user.getIdToken();
-
-      // 4. Execute the upload to your custom server
-      const { storagePath } = await uploadWebPhoto(file, idToken);
-
-      // 5. Finalize the document with the real storage path
+      // 4. Finalize the document with the real storage path
       await updatePhoto(photoId, {
         storagePath,
       });

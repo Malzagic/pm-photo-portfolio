@@ -1,73 +1,50 @@
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { storage } from "@/lib/firebase";
 /**
- * src/features/photos/photo.storage.ts
- * Dynamic storage service using environment variables.
- * Automatically switches between Localhost and Mikrus Server.
+ * In-memory cache for already resolved URLs.
+ * Prevents unnecessary calls to Firebase Storage.
  */
-
-// Vite uses import.meta.env to access variables prefixed with VITE_
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 const urlCache = new Map<string, string>();
-
 /**
- * Uploads a photo to the custom server (Mikrus in production).
+ * Uploads a photo to Firebase Storage.
+ * Returns storagePath and public download URL.
  */
-export async function uploadWebPhoto(file: File, idToken: string): Promise<{ storagePath: string; url: string }> {
-  const formData = new FormData();
-  formData.append("photo", file);
-
-  const response = await fetch(`${API_BASE_URL}/api/photos/upload`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to upload photo to custom server");
-  }
-
-  const data = await response.json();
-
-  // Construct the public URL using the dynamic base URL
-  const publicUrl = `${API_BASE_URL}/uploads/${data.storagePath}`;
-
+export async function uploadWebPhoto(file: File): Promise<{ storagePath: string; url: string }> {
+  // Generate unique filename (timestamp + original name)
+  const fileName = `${Date.now()}-${file.name}`;
+  const storagePath = `photos/web/${fileName}`;
+  const storageRef = ref(storage, storagePath);
+  // Upload file to Firebase Storage
+  await uploadBytes(storageRef, file);
+  // Get public download URL
+  const url = await getDownloadURL(storageRef);
+  // Cache URL for future use
+  urlCache.set(storagePath, url);
   return {
-    storagePath: data.storagePath,
-    url: publicUrl,
+    storagePath,
+    url,
   };
 }
-
 /**
- * Returns the public URL for a given storage path.
- * Effectively handles legacy Firebase URLs and new local storage paths.
+ * Returns public URL for a given storage path.
+ * Uses cache to avoid redundant Firebase calls.
  */
 export async function getPhotoUrl(storagePath: string): Promise<string> {
+  // Return cached URL if available
   const cached = urlCache.get(storagePath);
   if (cached) return cached;
-
-  // If path starts with http, it's likely an old Firebase URL
-  const url = storagePath.startsWith("http") ? storagePath : `${API_BASE_URL}/uploads/${storagePath}`;
-
+  const storageRef = ref(storage, storagePath);
+  const url = await getDownloadURL(storageRef);
+  // Cache result
   urlCache.set(storagePath, url);
   return url;
 }
-
 /**
- * Deletes a photo from the custom server.
+ * Deletes a photo from Firebase Storage.
  */
-export async function deleteWebPhoto(storagePath: string, idToken: string): Promise<void> {
-  // We use the dynamic API_BASE_URL to reach the correct endpoint
-  const response = await fetch(`${API_BASE_URL}/api/photos/${storagePath}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to delete photo from custom server");
-  }
-
+export async function deleteWebPhoto(storagePath: string): Promise<void> {
+  const storageRef = ref(storage, storagePath);
+  await deleteObject(storageRef);
+  // Remove from cache
   urlCache.delete(storagePath);
 }

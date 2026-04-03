@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
-    /* Silences deprecation warnings for TypeScript 6.0 standards. 
-       Required because 'baseUrl' is scheduled for removal in TS 7.0.
-    */
+    /* Required for TS 6.0+ to silence baseUrl deprecation warnings */
     "ignoreDeprecations": "6.0",
 
-    /* Base directory to resolve non-relative module names.
-       Note: In future versions, migrate to 'paths' without 'baseUrl'.
+    /* CRITICAL FIX: Use "preserve" to keep .jsx extensions in output.
+      This ensures your build process (like Vite or others) sees the files as expected.
     */
+    "jsx": "preserve",
+
+    /* Base directory for path resolution */
     "baseUrl": ".",
 
     /* Path mapping for professional alias imports (@/...) */
@@ -15,6 +16,7 @@
       "@/*": ["src/*"]
     },
 
+    /* Modern production standards */
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -22,6 +24,11 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true
-  }
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": false
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
 }
