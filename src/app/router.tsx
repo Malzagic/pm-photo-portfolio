@@ -14,6 +14,7 @@ import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminPhotosPage } from "@/pages/admin/AdminPhotosPage";
 import { AdminPhotoCreatePage } from "@/pages/admin/AdminPhotoCreatePage";
 import { AdminPhotoEditPage } from "@/pages/admin/AdminPhotoEditPage";
+import { AdminCategoriesPage } from "@/pages/admin/AdminCategoriesPage";
 
 import { AdminRoute } from "@/features/auth/AdminRoute";
 
@@ -46,8 +47,9 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: "/admin", element: <AdminPhotosPage /> },
-      { path: "/admin/photos/new", element: <AdminPhotoCreatePage /> },
+      { path: "/admin/photos/create", element: <AdminPhotoCreatePage /> },
       { path: "/admin/photos/:id", element: <AdminPhotoEditPage /> },
+      { path: "/admin/categories", element: <AdminCategoriesPage /> },
     ],
   },
 ]);

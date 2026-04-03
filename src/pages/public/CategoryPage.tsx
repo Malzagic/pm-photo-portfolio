@@ -1,102 +1,110 @@
-import { useParams } from "react-router-dom";
-import { usePublicPhotos } from "@/features/photos/usePublicPhotos";
-import type { PhotoCategory } from "@/features/photos/photo.types";
-import { getPhotoUrl } from "@/features/photos/photo.storage";
+import { useParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { usePublicPhotos } from "@/features/photos/usePublicPhotos";
+import { useCategories } from "@/features/categories/useCategories";
+import { getPhotoUrl } from "@/features/photos/photo.storage";
 import { setSEO } from "@/lib/seo";
 
-const ALLOWED_CATEGORIES: PhotoCategory[] = ["astro", "landscape", "nature"];
-
 export function CategoryPage() {
-  const { category } = useParams<{ category: string }>();
+  const { category: urlSlug } = useParams<{ category: string }>();
+  const { categories, loading: catsLoading } = useCategories();
 
-  const isValidCategory = !!category && ALLOWED_CATEGORIES.includes(category as PhotoCategory);
+  const currentCategory = categories.find(c => c.slug === urlSlug);
+  const isValidCategory = !!currentCategory;
 
-  // hooks must be called first
-  const typedCategory = isValidCategory ? (category as PhotoCategory) : "landscape";
-
-  const { photos, loading } = usePublicPhotos(typedCategory);
-
+  const { photos, loading: photosLoading } = usePublicPhotos(urlSlug || "");
   const [urls, setUrls] = useState<Record<string, string>>({});
 
-  // SEO effect
   useEffect(() => {
-    if (!isValidCategory) return;
-
-    const label = typedCategory.charAt(0).toUpperCase() + typedCategory.slice(1);
-
-    setSEO(`${label} Photography`, `${label} photography portfolio.`, {
-      title: `${label} Photography`,
-      description: `${label} photography portfolio.`,
+    if (!isValidCategory || !currentCategory) return;
+    setSEO(`${currentCategory.name}`, `Collection: ${currentCategory.name}`, {
+      title: `${currentCategory.name} | Archive`,
+      description: `View the ${currentCategory.name} photography series.`,
     });
-  }, [typedCategory, isValidCategory]);
+  }, [currentCategory, isValidCategory]);
 
-  // Load photo URLs
   useEffect(() => {
     async function loadUrls() {
       const entries = await Promise.all(
         photos.map(async photo => {
           const url = await getPhotoUrl(photo.storagePath);
           return [photo.id, url] as const;
-        })
+        }),
       );
-
       setUrls(Object.fromEntries(entries));
     }
-
-    if (photos.length > 0) {
-      loadUrls();
-    }
+    if (photos.length > 0) loadUrls();
   }, [photos]);
 
-  // WARUNKI DOPIERO TUTAJ
-  if (!isValidCategory) {
-    return <div>Category not found</div>;
-  }
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: 24,
-        }}
-      >
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="skeleton" style={{ paddingTop: "66%" }} />
-        ))}
-      </div>
-    );
-  }
-
-  if (photos.length === 0) {
-    return <p style={{ opacity: 0.6 }}>New work coming soon.</p>;
-  }
+  if (catsLoading || photosLoading) return <div className="skeleton" style={{ height: "60vh" }} />;
+  if (!isValidCategory) return <div style={{ padding: "2rem", opacity: 0.5 }}>Series not found.</div>;
 
   return (
-    <div>
-      <h1>{typedCategory}</h1>
+    <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+      <header style={{ marginBottom: "3rem", borderLeft: "2px solid #fff", paddingLeft: "1rem" }}>
+        <h1 style={{ fontSize: "0.9rem", letterSpacing: "3px", textTransform: "uppercase", opacity: 0.8, margin: 0 }}>
+          Series: {currentCategory.name}
+        </h1>
+        <span style={{ fontSize: "0.7rem", opacity: 0.3 }}>{photos.length} Assets in collection</span>
+      </header>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: 24,
-        }}
-      >
-        {photos.map(photo => (
-          <a key={photo.id} href={`/photo/${photo.slug}`}>
-            <img
-              src={urls[photo.id]}
-              alt={photo.title}
-              loading="lazy"
-              style={{ width: "100%", height: "auto", borderRadius: 6 }}
-              className="photo-clickable"
-            />
-          </a>
-        ))}
-      </div>
+      {photos.length === 0 ? (
+        <p style={{ opacity: 0.4, fontSize: "0.8rem" }}>Archive is empty.</p>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            // FIXED: Smaller thumbnails (160px) to create a "collection" feel
+            gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+            gap: "12px",
+          }}
+        >
+          {photos.map(photo => (
+            <Link
+              key={photo.id}
+              to={`/photo/${photo.slug}`}
+              style={{ textDecoration: "none", color: "inherit", display: "block" }}
+            >
+              <div className="thumbnail-wrapper" style={{ overflow: "hidden", background: "#111" }}>
+                <img
+                  src={urls[photo.id]}
+                  alt={photo.title}
+                  loading="lazy"
+                  style={{
+                    width: "100%",
+                    // Square aspect ratio for the "contact sheet" look
+                    aspectRatio: "1/1",
+                    objectFit: "cover",
+                    display: "block",
+                    filter: "grayscale(20%)", // Subtle street photography vibe
+                    transition: "transform 0.4s ease, filter 0.4s ease",
+                  }}
+                  className="photo-clickable"
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = "scale(1.05)";
+                    e.currentTarget.style.filter = "grayscale(0%)";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.filter = "grayscale(20%)";
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  marginTop: "6px",
+                  fontSize: "10px",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                  opacity: 0.3,
+                }}
+              >
+                {photo.title}
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { usePublicPhoto } from "@/features/photos/usePublicPhoto";
 import { getPhotoUrl } from "@/features/photos/photo.storage";
 import { useEffect, useState } from "react";
@@ -6,26 +6,21 @@ import { setSEO } from "@/lib/seo";
 
 export function PhotoPage() {
   const { slug } = useParams<{ slug: string }>();
-  const safeSlug = slug ?? "";
-
-  const { photo, loading } = usePublicPhoto(safeSlug);
+  const navigate = useNavigate();
+  const { photo, loading } = usePublicPhoto(slug ?? "");
 
   const [url, setUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // SEO effect
   useEffect(() => {
     if (!photo || !url) return;
-
-    setSEO(`${photo.title} – Photography`, `${photo.title}. ${photo.category} photography.`, {
-      title: `${photo.title} – Photography`,
-      description: `${photo.title}. ${photo.category} photography.`,
+    setSEO(`${photo.title}`, `Street photography asset: ${photo.title}`, {
+      title: `${photo.title} | PM`,
+      description: `Street photography asset: ${photo.title}`,
       image: url,
-      url: window.location.href,
     });
   }, [photo, url]);
 
-  // Load photo URL
   useEffect(() => {
     async function loadUrl() {
       if (photo?.storagePath) {
@@ -33,94 +28,97 @@ export function PhotoPage() {
         setUrl(downloadUrl);
       }
     }
-
     loadUrl();
   }, [photo]);
 
-  if (!slug) {
-    return <div>Invalid photo</div>;
-  }
-
-  if (loading) {
-    return (
-      <div
-        className="skeleton"
-        style={{
-          width: "100%",
-          height: "60vh",
-        }}
-      />
-    );
-  }
-
-  if (!photo) {
-    return <p style={{ opacity: 0.6 }}>New work coming soon.</p>;
-  }
+  if (loading) return <div className="skeleton" style={{ width: "100%", height: "80vh" }} />;
+  if (!photo) return <div style={{ padding: "4rem", opacity: 0.5 }}>Asset not found.</div>;
 
   return (
-    <div>
-      <h1 style={{ marginTop: 16 }}>{photo.title}</h1>
+    <div style={{ minHeight: "90vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      {/* NAVIGATION BACK */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          background: "none",
+          border: "none",
+          color: "#fff",
+          cursor: "pointer",
+          opacity: 0.4,
+          fontSize: "0.7rem",
+          textTransform: "uppercase",
+          letterSpacing: "2px",
+          marginBottom: "2rem",
+          width: "fit-content",
+        }}
+      >
+        ← Back to Series
+      </button>
 
-      {url && (
-        <img
-          src={url}
-          alt={photo.title}
-          onClick={() => setIsFullscreen(true)}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "2rem", alignItems: "end" }}>
+        <div style={{ position: "relative" }}>
+          {url && (
+            <img
+              src={url}
+              alt={photo.title}
+              onClick={() => setIsFullscreen(true)}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "80vh",
+                display: "block",
+                cursor: "zoom-in",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+              }}
+            />
+          )}
+        </div>
+
+        {/* METADATA: RAW MONOSPACE STYLE */}
+        <aside
           style={{
-            maxWidth: "100%",
-            height: "auto",
-            cursor: "zoom-in",
+            writingMode: "vertical-rl",
+            textTransform: "uppercase",
+            letterSpacing: "4px",
+            fontSize: "0.65rem",
+            opacity: 0.3,
+            fontFamily: "monospace",
           }}
-          className="photo-clickable"
-        />
-      )}
+        >
+          {photo.title} // {photo.category} // {photo.location || "Unknown Loc"}
+        </aside>
+      </div>
 
+      {/* FULLSCREEN OVERLAY */}
       {isFullscreen && url && (
         <div
           onClick={() => setIsFullscreen(false)}
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.95)",
+            background: "#000", // Solid black for zero distraction
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 1000,
+            cursor: "zoom-out",
           }}
         >
-          <button
-            onClick={() => setIsFullscreen(false)}
+          <img src={url} alt={photo.title} style={{ maxWidth: "95vw", maxHeight: "95vh", objectFit: "contain" }} />
+          <div
             style={{
               position: "absolute",
-              top: 16,
-              right: 16,
-              background: "none",
+              bottom: "20px",
+              left: "20px",
               color: "#fff",
-              fontSize: 24,
-              border: "none",
-              cursor: "pointer",
+              fontSize: "10px",
+              letterSpacing: "2px",
+              opacity: 0.5,
             }}
           >
-            ✕
-          </button>
-
-          <img
-            src={url}
-            alt={photo.title}
-            style={{
-              maxWidth: "90%",
-              maxHeight: "90%",
-            }}
-          />
+            {photo.title.toUpperCase()}
+          </div>
         </div>
       )}
-
-      <div style={{ marginTop: 16 }}>
-        <div>
-          Category: <p style={{ fontSize: "0.9rem", opacity: 0.6 }}>{photo.category}</p>
-        </div>
-        {photo.location && <div>Location: {photo.location}</div>}
-      </div>
     </div>
   );
 }

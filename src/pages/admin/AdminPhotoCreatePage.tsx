@@ -1,33 +1,62 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/features/auth/useAuth";
+import { useCategories } from "@/features/categories/useCategories"; // NEW: Dynamic categories hook
 import { uploadWebPhoto } from "@/features/photos/photo.storage";
 import type { PhotoCategory } from "@/features/photos/photo.types";
 import { createPhoto, updatePhoto } from "@/features/photos/photo.service";
 import { getImageAspectRatio } from "@/features/photos/photo.image";
 import { serverTimestamp } from "firebase/firestore";
 
+/**
+ * AdminPhotoCreatePage component.
+ * Handles photo uploads to the Mikrus server and metadata storage in Firestore.
+ * Now fully integrated with dynamic categories.
+ */
 export function AdminPhotoCreatePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Fetch dynamic categories from the CMS
+  const { categories, loading: catsLoading } = useCategories();
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<PhotoCategory>("astro");
+  const [category, setCategory] = useState<PhotoCategory>(""); // Initialized as empty
   const [published, setPublished] = useState(true);
   const [featured, setFeatured] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Effect to set the default category once they are loaded from Firestore.
+   */
+  useEffect(() => {
+    if (categories.length > 0 && !category) {
+      setCategory(categories[0].slug);
+    }
+  }, [categories, category]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!file || !title.trim()) {
-      alert("Title is required");
+    // Basic validation including dynamic category check
+    if (!file || !title.trim() || !category) {
+      alert("Title, image, and category are required.");
+      return;
+    }
+
+    if (!user) {
+      alert("You must be logged in to upload photos.");
       return;
     }
 
     setLoading(true);
 
     try {
+      // 1. Calculate aspect ratio for professional grid rendering
       const ratio = await getImageAspectRatio(file);
+
+      // 2. Initialize Firestore document with the selected dynamic category
       const photoId = await createPhoto({
         title,
         slug: title.toLowerCase().trim().replace(/\s+/g, "-"),
@@ -35,49 +64,126 @@ export function AdminPhotoCreatePage() {
         published,
         featured,
         aspectRatio: ratio,
-        storagePath: "",
+        storagePath: "", // Placeholder for server response
         takenAt: serverTimestamp(),
       });
 
-      const { storagePath } = await uploadWebPhoto(file, photoId);
+      // 3. Authenticate with Mikrus server using Firebase ID Token
+      const idToken = await user.getIdToken();
 
+      // 4. Execute the upload to your custom server
+      const { storagePath } = await uploadWebPhoto(file, idToken);
+
+      // 5. Finalize the document with the real storage path
       await updatePhoto(photoId, {
         storagePath,
       });
 
       navigate("/admin");
+    } catch (error) {
+      console.error("Upload process failed:", error);
+      alert("Something went wrong during the upload process.");
     } finally {
       setLoading(false);
     }
   }
 
+  // Prevent form rendering while categories are initializing for better UX
+  if (catsLoading) {
+    return <div style={{ opacity: 0.5, padding: "2rem" }}>Initializing CMS...</div>;
+  }
+
   return (
-    <div>
-      <h1>Add photo</h1>
+    <div className="admin-create-page">
+      <h1 style={{ fontSize: "1.5rem", marginBottom: "2rem", opacity: 0.8 }}>Add New Photo</h1>
 
-      <form onSubmit={handleSubmit}>
-        <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 400 }}>
+        {/* IMAGE UPLOAD */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: "0.9rem", opacity: 0.6 }}>Image File</label>
+          <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] ?? null)} disabled={loading} />
+        </div>
 
-        <input type="text" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
+        {/* PHOTO TITLE */}
+        <input
+          type="text"
+          placeholder="Photo Title"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          disabled={loading}
+          style={{
+            padding: "10px",
+            borderRadius: 4,
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.05)",
+            color: "#fff",
+          }}
+        />
 
-        <select value={category} onChange={e => setCategory(e.target.value as PhotoCategory)}>
-          <option value="astro">Astro</option>
-          <option value="landscape">Landscape</option>
-          <option value="nature">Nature</option>
-        </select>
+        {/* DYNAMIC CATEGORY SELECTOR */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: "0.9rem", opacity: 0.6 }}>Category</label>
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            disabled={loading}
+            style={{
+              padding: "10px",
+              borderRadius: 4,
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "#111",
+              color: "#fff",
+              cursor: "pointer",
+            }}
+          >
+            {categories.length === 0 && <option value="">No categories available</option>}
+            {categories.map(cat => (
+              <option key={cat.id} value={cat.slug}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <label>
-          <input type="checkbox" checked={published} onChange={e => setPublished(e.target.checked)} />
-          Published
-        </label>
+        {/* PUBLICATION FLAGS */}
+        <div style={{ display: "flex", gap: 20 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={published}
+              onChange={e => setPublished(e.target.checked)}
+              disabled={loading}
+            />
+            Published
+          </label>
 
-        <label>
-          <input type="checkbox" checked={featured} onChange={e => setFeatured(e.target.checked)} />
-          Featured
-        </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={featured}
+              onChange={e => setFeatured(e.target.checked)}
+              disabled={loading}
+            />
+            Featured
+          </label>
+        </div>
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Uploading…" : "Save"}
+        {/* ACTION BUTTON */}
+        <button
+          type="submit"
+          disabled={loading || categories.length === 0}
+          style={{
+            marginTop: 20,
+            padding: "12px",
+            cursor: loading ? "not-allowed" : "pointer",
+            backgroundColor: loading ? "#333" : "#fff",
+            color: loading ? "#666" : "#000",
+            border: "none",
+            borderRadius: 4,
+            fontWeight: 600,
+          }}
+        >
+          {loading ? "Processing..." : "Save Photo"}
         </button>
       </form>
     </div>

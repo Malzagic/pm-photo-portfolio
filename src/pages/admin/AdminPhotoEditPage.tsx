@@ -5,16 +5,14 @@ import { useForm } from "react-hook-form";
 import { useAdminPhoto } from "@/features/photos/useAdminPhoto";
 import { updatePhoto } from "@/features/photos/photo.service";
 import type { PhotoCategory } from "@/features/photos/photo.types";
+import { useCategories } from "@/features/categories/useCategories"; // NEW
+import { useAuth } from "@/features/auth/useAuth";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 
-/**
- * Form shape for editing a photo.
- * This is the single source of truth for the form data.
- */
 type PhotoFormData = {
   title: string;
-  category: PhotoCategory;
+  category: string; // Changed from PhotoCategory to string for dynamism
   published: boolean;
   featured: boolean;
 };
@@ -22,16 +20,13 @@ type PhotoFormData = {
 export function AdminPhotoEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  // Fetch photo data from Firestore
-  const { photo, loading } = useAdminPhoto(id ?? "");
+  const { photo, loading: photoLoading } = useAdminPhoto(id ?? "");
+  const { categories, loading: catsLoading } = useCategories(); // Fetch dynamic categories
+
   const photoId = photo?.id;
 
-  /**
-   * React Hook Form setup.
-   * defaultValues are placeholders and will be replaced
-   * once the async photo data is loaded.
-   */
   const {
     register,
     handleSubmit,
@@ -40,17 +35,12 @@ export function AdminPhotoEditPage() {
   } = useForm<PhotoFormData>({
     defaultValues: {
       title: "",
-      category: "astro",
+      category: "",
       published: true,
       featured: false,
     },
   });
 
-  /**
-   * Synchronize async photo data with the form.
-   * reset() is the recommended way to populate a form
-   * after data has been loaded.
-   */
   useEffect(() => {
     if (photo) {
       reset({
@@ -62,85 +52,113 @@ export function AdminPhotoEditPage() {
     }
   }, [photo, reset]);
 
-  // Loading state – skeleton provides better UX than plain text
-  if (loading) {
-    return <Skeleton height={300} />;
-  }
-
-  // Invalid or missing photo
-  if (!photo) {
-    return <div>Photo not found</div>;
-  }
-
-  /**
-   * Form submit handler.
-   * Uses RHF formState to manage submitting state.
-   */
   async function onSubmit(data: PhotoFormData) {
-    if (!photoId) {
-      // This should never happen, but keeps TypeScript and runtime safe
-      return;
-    }
-    await updatePhoto(photoId, {
-      title: data.title,
-      slug: data.title.toLowerCase().trim().replace(/\s+/g, "-"),
-      category: data.category,
-      published: data.published,
-      featured: data.featured,
-    });
+    if (!photoId || !user) return;
 
-    // Navigate back to admin list after successful save
-    navigate("/admin");
+    try {
+      await updatePhoto(photoId, {
+        title: data.title,
+        slug: data.title.toLowerCase().trim().replace(/\s+/g, "-"),
+        category: data.category as PhotoCategory,
+        published: data.published,
+        featured: data.featured,
+      });
+      navigate("/admin");
+    } catch (error) {
+      console.error("Failed to update photo:", error);
+      alert("Error updating photo document.");
+    }
   }
+
+  // Combined loading state
+  if (photoLoading || catsLoading) {
+    return (
+      <div style={{ maxWidth: 420 }}>
+        <Skeleton height={40} />
+        <Skeleton height={300} />
+      </div>
+    );
+  }
+
+  if (!photo) return <div style={{ opacity: 0.6 }}>Photo asset not found.</div>;
 
   return (
-    <div style={{ maxWidth: 420 }}>
-      <h1>Edit photo</h1>
+    <div style={{ maxWidth: 420 }} className="admin-edit-container">
+      <h1 style={{ fontSize: "1.5rem", fontWeight: 400, marginBottom: "2rem", opacity: 0.8 }}>Edit Photo Details</h1>
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {/* TITLE */}
-        <label style={{ display: "block", marginBottom: 16 }}>
-          <div>Title</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: "0.85rem", opacity: 0.5 }}>Title</label>
           <input
             type="text"
-            {...register("title", {
-              required: "Title is required",
-            })}
             disabled={isSubmitting}
+            style={{
+              padding: "12px",
+              borderRadius: 4,
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "rgba(255,255,255,0.05)",
+              color: "#fff",
+            }}
+            {...register("title", { required: "Title is required" })}
           />
-          {errors.title && <p style={{ color: "red", marginTop: 4 }}>{errors.title.message}</p>}
-        </label>
+          {errors.title && <span style={{ color: "#ff4444", fontSize: "0.75rem" }}>{errors.title.message}</span>}
+        </div>
 
-        {/* CATEGORY */}
-        <label style={{ display: "block", marginBottom: 16 }}>
-          <div>Category</div>
-          <select {...register("category")} disabled={isSubmitting}>
-            <option value="astro">Astro</option>
-            <option value="landscape">Landscape</option>
-            <option value="nature">Nature</option>
+        {/* DYNAMIC CATEGORY SELECT */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: "0.85rem", opacity: 0.5 }}>Category</label>
+          <select
+            disabled={isSubmitting}
+            style={{
+              padding: "12px",
+              borderRadius: 4,
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "#111",
+              color: "#fff",
+            }}
+            {...register("category", { required: "Category is required" })}
+          >
+            <option value="" disabled>
+              Select category
+            </option>
+            {categories.map(cat => (
+              <option key={cat.id} value={cat.slug}>
+                {cat.name}
+              </option>
+            ))}
           </select>
-        </label>
+        </div>
 
-        {/* FLAGS */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block" }}>
-            <input type="checkbox" {...register("published")} disabled={isSubmitting} />
-            Published
+        {/* FLAGS & BUTTONS (SAME AS BEFORE) */}
+        <div style={{ display: "flex", gap: 24, padding: "10px 0" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.9rem" }}>
+            <input type="checkbox" {...register("published")} /> Published
           </label>
-
-          <label style={{ display: "block" }}>
-            <input type="checkbox" {...register("featured")} disabled={isSubmitting} />
-            Featured
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.9rem" }}>
+            <input type="checkbox" {...register("featured")} /> Featured
           </label>
         </div>
 
-        {/* ACTIONS */}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Saving…" : "Save"}
+        <div style={{ display: "flex", gap: 12, marginTop: "1rem" }}>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            style={{ flex: 1, padding: "12px", borderRadius: 4, background: "#fff", color: "#000", fontWeight: 600 }}
+          >
+            {isSubmitting ? "Saving..." : "Update Metadata"}
           </button>
-
-          <button type="button" onClick={() => navigate("/admin")} disabled={isSubmitting}>
+          <button
+            type="button"
+            onClick={() => navigate("/admin")}
+            style={{
+              padding: "12px 20px",
+              borderRadius: 4,
+              background: "transparent",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
             Cancel
           </button>
         </div>
